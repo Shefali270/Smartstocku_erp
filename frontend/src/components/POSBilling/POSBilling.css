@@ -1,0 +1,70 @@
+.pos-layout {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 20px;
+  font-family: 'Inter', sans-serif;
+}
+
+.pos-products-card,
+.pos-bill-card {
+  background: #ffffff;
+  padding: 22px;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.pos-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+
+.pos-product-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 16px;
+  text-align: center;
+  cursor: pointer;
+  background: #f8fafc;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.pos-product-item:hover {
+  transform: translateY(-2px);
+  border-color: #93c5fd;
+  box-shadow: 0 6px 14px rgba(15, 23, 42, 0.06);
+}
+
+.pos-product-img {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  margin: 0 auto 8px auto;
+  display: block;
+  border-radius: 6px;
+}
+
+.pos-product-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+  line-height: 1.2;
+}
+
+.pos-product-name {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+  color: #0f172a;
+}
+
+.pos-product-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: #2563eb;
+}
+
+@media print {
+  .pos-products-card {
+    display: none;
+  }
+}            

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Search, Plus, Pencil, Trash2, X } from 'lucide-react';
 
 const STORAGE_KEY = 'smartstock_products';
+const API_BASE = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
 
 const INITIAL_PRODUCTS = [
   {
@@ -56,6 +57,18 @@ const INITIAL_PRODUCTS = [
   },
 ];
 
+async function syncProductsToBackend(list) {
+  try {
+    await fetch(`${API_BASE}/api/products`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ products: list }),
+    });
+  } catch {
+    // fallback if backend is offline
+  }
+}
+
 export default function InventoryManager({
   products: externalProducts,
   onAddProduct,
@@ -75,21 +88,48 @@ export default function InventoryManager({
     return INITIAL_PRODUCTS;
   });
 
+  // Backend se products + images load karke localStorage aur state sync karna
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/products`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverProducts = Array.isArray(data) ? data : data?.products;
+        if (active && Array.isArray(serverProducts) && serverProducts.length > 0) {
+          setLocalProducts(serverProducts);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(serverProducts));
+            window.dispatchEvent(new Event('storage'));
+          } catch {
+            // ignore storage quota error
+          }
+        }
+      } catch {
+        // keep localStorage/default if backend is unreachable
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const productsList =
     Array.isArray(externalProducts) && externalProducts.length > 0
       ? externalProducts
       : localProducts;
 
-  useEffect(() => {
-    if (!Array.isArray(externalProducts)) {
-      try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(localProducts));
-        window.dispatchEvent(new Event('storage'));
-      } catch {
-        // ignore storage quota error
-      }
+  const persistList = (nextList) => {
+    setLocalProducts(nextList);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextList));
+      window.dispatchEvent(new Event('storage'));
+    } catch {
+      // ignore storage quota error
     }
-  }, [localProducts, externalProducts]);
+    syncProductsToBackend(nextList);
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [showForm, setShowForm] = useState(false);
@@ -135,10 +175,11 @@ export default function InventoryManager({
   };
 
   const handleDelete = (id) => {
+    const nextList = productsList.filter((p) => p.id !== id);
     if (typeof onDeleteProduct === 'function') {
       onDeleteProduct(id);
     }
-    setLocalProducts((prev) => prev.filter((p) => p.id !== id));
+    persistList(nextList);
   };
 
   const handleFileChange = (e) => {
@@ -172,12 +213,14 @@ export default function InventoryManager({
         icon: existing.icon || '📦',
       };
 
+      const nextList = productsList.map((p) =>
+        p.id === editingId ? updatedProd : p
+      );
+
       if (typeof onUpdateProduct === 'function') {
         onUpdateProduct(updatedProd);
       }
-      setLocalProducts((prev) =>
-        prev.map((p) => (p.id === editingId ? updatedProd : p))
-      );
+      persistList(nextList);
     } else {
       const newProd = {
         id: Date.now(),
@@ -190,19 +233,12 @@ export default function InventoryManager({
         icon: '📦',
       };
 
+      const nextList = [...productsList, newProd];
+
       if (typeof onAddProduct === 'function') {
         onAddProduct(newProd);
       }
-      setLocalProducts((prev) => {
-        const next = [...prev, newProd];
-        try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-          window.dispatchEvent(new Event('storage'));
-        } catch {
-          // ignore storage quota error
-        }
-        return next;
-      });
+      persistList(nextList);
     }
 
     resetForm();
@@ -309,7 +345,12 @@ export default function InventoryManager({
             <button
               type="button"
               onClick={resetForm}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b' }}
+              style={{
+                background: 'none',
+                border: 'none',
+                cursor: 'pointer',
+                color: '#64748b',
+              }}
             >
               <X size={18} />
             </button>

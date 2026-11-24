@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 
 const STORAGE_KEY = 'smartstock_products';
+const API_BASE = import.meta.env?.VITE_API_URL || 'http://localhost:5000';
 
 const INITIAL_PRODUCTS = [
   { id: 1, name: 'Wireless Mechanical Keyboard', sku: 'SKU-1042', category: 'Peripherals', stock: 24, price: 3499, image: '' },
@@ -8,6 +9,18 @@ const INITIAL_PRODUCTS = [
   { id: 3, name: '27" 4K IPS Monitor', sku: 'SKU-2011', category: 'Electronics', stock: 12, price: 24500, image: '' },
   { id: 4, name: 'Ergonomic Wireless Mouse', sku: 'SKU-1105', category: 'Peripherals', stock: 3, price: 1299, image: '' },
 ];
+
+async function syncProductsToBackend(list) {
+  try {
+    await fetch(`${API_BASE}/api/products`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ products: list }),
+    });
+  } catch {
+    // ignore if backend is offline
+  }
+}
 
 export default function ProductsStock() {
   const [products, setProducts] = useState(() => {
@@ -29,9 +42,35 @@ export default function ProductsStock() {
   const [price, setPrice] = useState(1000);
   const [image, setImage] = useState('');
 
+  // Backend (products.json) se products aur images load karna
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
-    window.dispatchEvent(new Event('storage'));
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch(`${API_BASE}/api/products`);
+        if (!res.ok) return;
+        const data = await res.json();
+        const serverProducts = Array.isArray(data) ? data : data?.products;
+        if (active && Array.isArray(serverProducts) && serverProducts.length > 0) {
+          setProducts(serverProducts);
+          try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(serverProducts));
+          } catch {}
+        }
+      } catch {
+        // ignore if backend is offline
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(products));
+      window.dispatchEvent(new Event('storage'));
+    } catch {}
   }, [products]);
 
   const handleFileChange = (e) => {
@@ -39,7 +78,7 @@ export default function ProductsStock() {
     if (!file) return;
     const reader = new FileReader();
     reader.onloadend = () => {
-      setImage(reader.result); // base64 image string
+      setImage(String(reader.result || '')); // base64 image string
     };
     reader.readAsDataURL(file);
   };
@@ -58,7 +97,10 @@ export default function ProductsStock() {
       image, // selected file image
     };
 
-    setProducts((prev) => [...prev, newProd]);
+    const nextList = [...products, newProd];
+    setProducts(nextList);
+    syncProductsToBackend(nextList);
+
     setName('');
     setImage('');
     setShowForm(false);
